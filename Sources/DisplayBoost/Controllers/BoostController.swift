@@ -26,6 +26,7 @@ final class BoostController {
     private var suspensionReasons: Set<BoostSuspensionReason> = []
     private var savedNativeBrightness: Float?
     private var activeDisplayID: CGDirectDisplayID?
+    private var activeColorProfileIdentity: ColorProfileIdentity?
     private var backlightPinnedForBoost = false
     private var gammaRecoveryHandled = false
     private var engagementGeneration = 0
@@ -135,6 +136,7 @@ final class BoostController {
         }
 
         activeDisplayID = displayID
+        activeColorProfileIdentity = Self.colorProfileIdentity(for: screen)
 
         if savedNativeBrightness == nil {
             guard let currentBrightness = nativeBrightness.read(displayID: displayID) else {
@@ -347,6 +349,15 @@ final class BoostController {
             return
         }
 
+        let currentIdentity = Self.colorProfileIdentity(for: screen)
+        if let activeColorProfileIdentity,
+           activeColorProfileIdentity.matches(currentIdentity) {
+            // macOS also emits this notification for transient EDR and display
+            // environment refreshes. Keep the boost when the ICC profile itself
+            // has not changed.
+            return
+        }
+
         if let currentBrightness = nativeBrightness.read(displayID: displayID) {
             if currentBrightness < Self.nativeBrightnessMaximumThreshold {
                 // A color-profile change must use the ColorSync reset below rather than
@@ -368,6 +379,7 @@ final class BoostController {
         }
 
         wantedActive = false
+        activeColorProfileIdentity = nil
         resumePending = false
         resumeBrightnessBaseline = nil
         backlightPinnedForBoost = false
@@ -491,6 +503,7 @@ final class BoostController {
         defaults.synchronize()
         if fullyRestored {
             activeDisplayID = nil
+            activeColorProfileIdentity = nil
         }
         return fullyRestored
     }
@@ -623,6 +636,7 @@ final class BoostController {
         if gammaRestored {
             gamma.discardBaseline()
             activeDisplayID = nil
+            activeColorProfileIdentity = nil
         }
 
         defaults.set(!gammaRestored, forKey: DefaultsKey.recoveryRequired)
@@ -741,6 +755,7 @@ final class BoostController {
             defaults.set(false, forKey: DefaultsKey.recoveryRequired)
             defaults.synchronize()
             activeDisplayID = nil
+            activeColorProfileIdentity = nil
         }
         return nativeBrightnessRestored
     }
@@ -752,5 +767,14 @@ final class BoostController {
 
     private func publishSnapshot() {
         onSnapshot?(snapshot)
+    }
+
+    private static func colorProfileIdentity(
+        for screen: NSScreen
+    ) -> ColorProfileIdentity {
+        ColorProfileIdentity(
+            iccProfileData: screen.colorSpace?.iccProfileData,
+            fallbackName: screen.colorSpace?.localizedName
+        )
     }
 }

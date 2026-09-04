@@ -118,8 +118,42 @@ expect(
     "ignores unrelated system events"
 )
 
+let profileA = ColorProfileIdentity(
+    iccProfileData: Data([1, 2, 3]),
+    fallbackName: "Display P3"
+)
+expect(
+    profileA.matches(ColorProfileIdentity(
+        iccProfileData: Data([1, 2, 3]),
+        fallbackName: "Transient EDR name"
+    )),
+    "identical ICC data ignores transient color-space notification"
+)
+expect(
+    !profileA.matches(ColorProfileIdentity(
+        iccProfileData: Data([3, 2, 1]),
+        fallbackName: "Display P3"
+    )),
+    "changed ICC data is detected"
+)
+expect(
+    ColorProfileIdentity(iccProfileData: nil, fallbackName: "Display P3")
+        .matches(ColorProfileIdentity(
+            iccProfileData: nil,
+            fallbackName: "Display P3"
+        )),
+    "profile name is used when ICC data is unavailable"
+)
+expect(
+    profileA.matches(ColorProfileIdentity(
+        iccProfileData: nil,
+        fallbackName: "Display P3"
+    )),
+    "temporary missing ICC data falls back to profile name"
+)
+
 if failureCount > 0 {
     exit(1)
 }
 
-print("20/20 logic checks passed")
+print("24/24 logic checks passed")

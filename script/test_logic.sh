@@ -9,6 +9,7 @@ swiftc \
   "$ROOT_DIR/Sources/DisplayBoost/Models/BoostLevel.swift" \
   "$ROOT_DIR/Sources/DisplayBoost/Models/BrightnessKeyStep.swift" \
   "$ROOT_DIR/Sources/DisplayBoost/Models/BrightnessMediaKeyEvent.swift" \
+  "$ROOT_DIR/Sources/DisplayBoost/Models/ColorProfileIdentity.swift" \
   "$ROOT_DIR/Tests/LogicTests/main.swift" \
   -o "$TEST_BINARY"
 "$TEST_BINARY"
