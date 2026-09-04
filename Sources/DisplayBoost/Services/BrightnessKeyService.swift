@@ -66,7 +66,10 @@ final class BrightnessKeyService {
         }
 
         guard let newTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
+            // Intercept brightness media keys before macOS' OSD sees key-down.
+            // At the session tap the system can show its HUD first, then miss the
+            // swallowed key-up and leave that HUD pinned on screen indefinitely.
+            tap: .cghidEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: Self.systemDefinedEventMask,
