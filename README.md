@@ -5,6 +5,8 @@ XDR display's EDR headroom and applies a bounded gamma-table boost.
 
 ## Compatibility & installation
 
+[Download the latest universal app](https://github.com/JJ22007/display-boost-macos/releases/latest).
+
 macOS 13 or later. The universal app contains native arm64 and x86_64 binaries.
 Copy `Display Boost.app` from `Display-Boost-universal.zip` into Applications on
 each Mac. Enable Accessibility for that copy to use F1/F2.
@@ -76,3 +78,10 @@ brightness for color-critical or HDR mastering work.
 ./script/build_and_run.sh --verify
 ./script/package_release.sh
 ```
+
+## Releases
+
+Increment `CFBundleShortVersionString` and `CFBundleVersion` in
+`Support/Info.plist`, update `RELEASE_NOTES.md`, then push to `main`. The release
+workflow tests and builds both architectures and publishes a versioned ZIP and
+SHA-256 checksum to GitHub Releases. Existing releases are never overwritten.
