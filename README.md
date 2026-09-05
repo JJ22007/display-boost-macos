@@ -27,6 +27,11 @@ notarization is a separate step. Do not disable Gatekeeper system-wide.
 
 ## Reliability
 
+Version 1.2.1 keeps menu-selected boost active when the brightness key listener
+temporarily loses access. Small backlight dips and unreadable samples require
+confirmation before disabling boost; clear native brightness reductions still
+take precedence immediately. `lastStopReason` records confirmed native changes.
+
 Version 1.2 resumes after sleep and safely re-baselines after a changed color
 profile. Identical-profile notifications are ignored; error states can be retried
 from the slider. User or system backlight reductions still take precedence so

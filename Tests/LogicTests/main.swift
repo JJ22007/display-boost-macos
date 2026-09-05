@@ -172,6 +172,21 @@ for headroom: Float in [1, 1.1, 1.3, 2, 4, 8, 16] {
 expect(BoostCalibration.gammaFactor(level: BoostLevel(1.6), currentEDR: .nan) == 1,
        "invalid headroom does not boost")
 
+var backlight = BacklightObservation()
+expect(backlight.observe(1, now: 0) == .ready, "full backlight ready")
+expect(backlight.observe(0.99, now: 1) == .pending, "single small fluctuation does not disable")
+expect(backlight.observe(1, now: 1.2) == .ready, "transient fluctuation recovers")
+expect(backlight.observe(nil, now: 2) == .pending, "temporary read failure tolerated")
+expect(backlight.observe(1, now: 2.2) == .ready, "read recovery resets deadline")
+expect(backlight.observe(0.99, now: 3) == .pending, "fine adjustment initially pending")
+expect(backlight.observe(0.99, now: 4.1) == .yield, "persistent fine adjustment respected")
+backlight.reset()
+expect(backlight.observe(0.94, now: 5) == .yield, "native F1 yields immediately")
+expect(backlight.observe(nil, now: 6) == .pending, "unknown reading begins bounded wait")
+expect(backlight.observe(.nan, now: 7.1) == .unavailable, "persistent invalid reading stops safely")
+backlight.reset()
+expect(backlight.observe(0.99, now: 20) == .pending, "new activation has fresh deadline")
+
 if failureCount > 0 {
     exit(1)
 }

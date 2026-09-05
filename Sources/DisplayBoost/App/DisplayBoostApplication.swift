@@ -58,6 +58,12 @@ enum DisplayBoostApplication {
             if !testedWake {
                 testedWake = true
                 DispatchQueue.main.async {
+                    controller.brightnessKeyControlDidBecomeUnavailable()
+                    guard controller.state == .active else {
+                        controller.shutdown()
+                        fputs("SELFTEST FAIL: key listener interruption disabled boost\n", stderr)
+                        Darwin.exit(2)
+                    }
                     if let screen = DisplayLookup.builtInScreen {
                         controller.colorSpaceDidChange(on: screen)
                     }

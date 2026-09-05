@@ -6,6 +6,7 @@ TEST_BINARY="$ROOT_DIR/.build/displayboost-logic-tests"
 
 mkdir -p "$ROOT_DIR/.build"
 swiftc \
+  "$ROOT_DIR/Sources/DisplayBoost/Models/BacklightObservation.swift" \
   "$ROOT_DIR/Sources/DisplayBoost/Models/BoostLevel.swift" \
   "$ROOT_DIR/Sources/DisplayBoost/Models/BrightnessKeyStep.swift" \
   "$ROOT_DIR/Sources/DisplayBoost/Models/BrightnessMediaKeyEvent.swift" \

@@ -35,6 +35,7 @@ final class BoostController {
     private var resumePending = false
     private var resumeBrightnessBaseline: Float?
     private var integrityTimer: Timer?
+    private var backlightObservation = BacklightObservation()
 
     private(set) var state: BoostState = .off
     private(set) var level: BoostLevel
@@ -91,6 +92,7 @@ final class BoostController {
 
     func enable() {
         if wantedActive && state == .active { return }
+        backlightObservation.reset()
         resumePending = false
         resumeBrightnessBaseline = nil
         if level.factor <= BoostLevel.minimum {
@@ -269,17 +271,11 @@ final class BoostController {
 
     func brightnessKeyControlDidBecomeUnavailable() {
         guard wantedActive else { return }
-        guard let displayID = activeDisplayID ??
-                DisplayLookup.builtInScreen?.displayBoostID,
-              let currentBrightness = nativeBrightness.read(displayID: displayID) else {
-            stopBoostWithoutChangingNativeBrightness("F1/F2 监听已停止，增亮已关闭")
-            return
+        // Key interception and EDR are independent. A temporarily unavailable tap
+        // must not undo a menu-selected boost. Native changes still take priority.
+        if let displayID = activeDisplayID {
+            _ = verifyNativeBrightnessForBoost(displayID: displayID)
         }
-        if currentBrightness < Self.nativeBrightnessMaximumThreshold {
-            endBoostPreservingNativeBrightness(currentBrightness)
-            return
-        }
-        disable()
     }
 
     func displayParametersDidChange() {
@@ -445,10 +441,11 @@ final class BoostController {
             failActivation("内置显示器配置已改变")
             return
         }
-        guard verifyNativeBrightnessForBoost(displayID: displayID) else { return }
+        let backlightReady = verifyNativeBrightnessForBoost(displayID: displayID)
+        guard wantedActive else { return }
 
         let currentEDR = screen.maximumExtendedDynamicRangeColorComponentValue
-        if currentEDR > 1.05 {
+        if backlightReady && currentEDR > 1.05 {
             applyCurrentLevel()
             return
         }
@@ -604,27 +601,28 @@ final class BoostController {
     private func disableIfNativeBrightnessChanged(
         displayID: CGDirectDisplayID
     ) -> Bool {
-        guard let currentBrightness = nativeBrightness.read(displayID: displayID),
-              currentBrightness < Self.nativeBrightnessMaximumThreshold else {
-            return false
-        }
-
-        endBoostPreservingNativeBrightness(currentBrightness)
-        return true
+        _ = verifyNativeBrightnessForBoost(displayID: displayID)
+        return !wantedActive
     }
 
     private func verifyNativeBrightnessForBoost(
         displayID: CGDirectDisplayID
     ) -> Bool {
-        guard let currentBrightness = nativeBrightness.read(displayID: displayID) else {
+        let currentBrightness = nativeBrightness.read(displayID: displayID)
+        switch backlightObservation.observe(currentBrightness, now: ProcessInfo.processInfo.systemUptime) {
+        case .ready:
+            return true
+        case .pending:
+            return false
+        case .unavailable:
             stopBoostWithoutChangingNativeBrightness("无法确认系统背光亮度，增亮已关闭")
             return false
+        case .yield:
+            guard let currentBrightness else { return false }
+            defaults.set("native-backlight changed to \(currentBrightness)", forKey: "lastStopReason")
+            endBoostPreservingNativeBrightness(currentBrightness)
+            return false
         }
-        guard currentBrightness < Self.nativeBrightnessMaximumThreshold else {
-            return true
-        }
-        endBoostPreservingNativeBrightness(currentBrightness)
-        return false
     }
 
     private func endBoostPreservingNativeBrightness(_ currentBrightness: Float) {
