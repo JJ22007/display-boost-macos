@@ -47,6 +47,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     private func configureMenu() {
         menu.delegate = self
+        menu.autoenablesItems = false
 
         let titleItem = NSMenuItem(title: "Display Boost", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
@@ -76,32 +77,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        let peakInfo = NSMenuItem(
-            title: "1600 nit 仅为局部峰值",
-            action: nil,
-            keyEquivalent: ""
-        )
-        peakInfo.isEnabled = false
-        menu.addItem(peakInfo)
-
-        let backlightInfo = NSMenuItem(
-            title: "开启时会临时拉满系统背光",
-            action: nil,
-            keyEquivalent: ""
-        )
-        backlightInfo.isEnabled = false
-        menu.addItem(backlightInfo)
-
-        let conflictInfo = NSMenuItem(
-            title: "请勿与其他 Gamma 增亮工具同时使用",
-            action: nil,
-            keyEquivalent: ""
-        )
-        conflictInfo.isEnabled = false
-        menu.addItem(conflictInfo)
-
         let quitItem = NSMenuItem(
-            title: "退出 Display Boost",
+            title: "退出",
             action: #selector(quit),
             keyEquivalent: "q"
         )
@@ -113,7 +90,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let item = NSMenuItem()
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 270, height: 62))
 
-        let caption = NSTextField(labelWithString: "增亮目标（100–160%）")
+        let caption = NSTextField(labelWithString: "亮度")
         caption.font = .systemFont(ofSize: 12, weight: .medium)
         caption.frame = NSRect(x: 14, y: 38, width: 140, height: 17)
         container.addSubview(caption)
@@ -144,24 +121,26 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let active = snapshot.state.isRunning
         toggleItem.state = active ? .on : .off
         toggleItem.title = active ? "关闭增亮" : "开启增亮"
+        let supported = snapshot.potentialEDRHeadroom > 1.05
+        toggleItem.isEnabled = active || supported
+        slider.isEnabled = supported
+        statusTextItem.toolTip = nil
 
         let symbol: String
         switch snapshot.state {
         case .off:
             symbol = "sun.max.circle"
-            statusTextItem.title = "状态：标准亮度 · 点“开启增亮”或拖动滑杆"
+            statusTextItem.title = supported ? "标准亮度" : "此屏幕不支持增亮"
         case .engaging:
             symbol = "sun.max.circle.fill"
-            statusTextItem.title = "状态：正在启用 EDR…"
+            statusTextItem.title = "正在恢复…"
         case .active:
             symbol = "sun.max.circle.fill"
-            statusTextItem.title = String(
-                format: "状态：已增亮 · EDR %.2fx",
-                snapshot.currentEDRHeadroom
-            )
+            statusTextItem.title = "增亮已开启"
         case let .unavailable(message):
             symbol = "exclamationmark.triangle"
-            statusTextItem.title = "状态：\(message)"
+            statusTextItem.title = "暂不可用 · 点击开启重试"
+            statusTextItem.toolTip = message
         }
 
         statusItem.button?.image = NSImage(
@@ -173,13 +152,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     func refreshBrightnessKeyStatus() {
         if !brightnessKeyService.isTrusted {
-            brightnessKeysItem.title = "F1/F2 未接管：点此授予“辅助功能”权限…"
+            brightnessKeysItem.title = "授权 F1 / F2…"
             brightnessKeysItem.state = .off
         } else if brightnessKeyService.isRunning {
-            brightnessKeysItem.title = "F1/F2：最高 160%（已启用）"
+            brightnessKeysItem.title = "F1 / F2"
             brightnessKeysItem.state = .on
         } else {
-            brightnessKeysItem.title = "F1/F2：监听未启动，点此重试…"
+            brightnessKeysItem.title = "重试 F1 / F2"
             brightnessKeysItem.state = .off
         }
     }

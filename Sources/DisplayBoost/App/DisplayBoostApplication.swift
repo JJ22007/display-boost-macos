@@ -44,6 +44,8 @@ enum DisplayBoostApplication {
             ProcessInfo.processInfo.environment["DISPLAYBOOST_SELF_TEST_LEVEL"] ?? ""
         ) ?? 1.05
         var completionStarted = false
+        var testedWake = false
+        var testedProfileRecovery = false
 
         controller.onSnapshot = { snapshot in
             print(
@@ -53,6 +55,35 @@ enum DisplayBoostApplication {
             )
 
             guard snapshot.state == .active, !completionStarted else { return }
+            if !testedWake {
+                testedWake = true
+                DispatchQueue.main.async {
+                    if let screen = DisplayLookup.builtInScreen {
+                        controller.colorSpaceDidChange(on: screen)
+                    }
+                    guard controller.state == .active else {
+                        controller.shutdown()
+                        fputs("SELFTEST FAIL: identical profile disabled boost\n", stderr)
+                        Darwin.exit(2)
+                    }
+                    controller.suspend(for: .systemSleep)
+                    controller.suspend(for: .screenSleep)
+                    controller.resume(from: .systemSleep)
+                    controller.resume(from: .screenSleep)
+                }
+                return
+            }
+            if !testedProfileRecovery {
+                testedProfileRecovery = true
+                DispatchQueue.main.async {
+                    guard let screen = DisplayLookup.builtInScreen else { return }
+                    // Inject a changed identity into the production recovery path.
+                    // This tests re-baselining without changing the user's ICC profile.
+                    controller.handleColorProfileChange(on: screen, identity:
+                        ColorProfileIdentity(iccProfileData: Data([0x44, 0x42]), fallbackName: "self-test"))
+                }
+                return
+            }
             completionStarted = true
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
@@ -89,6 +120,7 @@ enum DisplayBoostApplication {
                     )
                     application.terminate(nil)
                 } else {
+                    print("SELFTEST readback baselineGamma=\(baselineEndpoint) activeGamma=\(String(describing: activeEndpoint)) restoredGamma=\(String(describing: restoredEndpoint)) baselineBacklight=\(baselineBrightness) activeBacklight=\(String(describing: activeBrightness)) restoredBacklight=\(String(describing: restoredBrightness)) restore=\(controllerReportedRestore)")
                     fputs(
                         "SELFTEST FAIL: display readback did not verify apply/restore\n",
                         stderr
@@ -117,8 +149,7 @@ enum DisplayBoostApplication {
         controller.setLevel(requestedTestLevel)
         controller.enable()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-            guard !completionStarted else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
             controller.shutdown()
             controller.setLevel(previousLevel)
             fputs("SELFTEST FAIL: boost did not become active\n", stderr)

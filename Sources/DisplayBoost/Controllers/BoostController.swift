@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import OSLog
 
 enum BoostSuspensionReason: Hashable {
     case systemSleep
@@ -21,6 +22,7 @@ final class BoostController {
     private let edrTrigger = EDRTriggerService()
     private let nativeBrightness = NativeBrightnessService()
     private let defaults = UserDefaults.standard
+    private let logger = Logger(subsystem: "local.jjxu.DisplayBoost", category: "Recovery")
 
     private var wantedActive = false
     private var suspensionReasons: Set<BoostSuspensionReason> = []
@@ -88,6 +90,7 @@ final class BoostController {
     }
 
     func enable() {
+        if wantedActive && state == .active { return }
         resumePending = false
         resumeBrightnessBaseline = nil
         if level.factor <= BoostLevel.minimum {
@@ -165,7 +168,7 @@ final class BoostController {
             return
         }
 
-        waitForEDR(generation: generation, attemptsRemaining: 30)
+        waitForEDR(generation: generation, attemptsRemaining: 80)
     }
 
     @discardableResult
@@ -204,7 +207,7 @@ final class BoostController {
             return
         }
 
-        let shouldEnable = !wantedActive && state == .off
+        let shouldEnable = !wantedActive
         setLevel(proposedLevel.factor)
         if shouldEnable {
             enable()
@@ -245,8 +248,9 @@ final class BoostController {
             return true
         }
 
-        guard state == .off,
+        guard !wantedActive,
               direction == .increase,
+              snapshot.potentialEDRHeadroom > 1.05,
               let displayID = DisplayLookup.builtInScreen?.displayBoostID,
               let currentBrightness = nativeBrightness.read(displayID: displayID),
               currentBrightness >= 0.995 else {
@@ -260,7 +264,7 @@ final class BoostController {
         )
         setLevel(next.factor)
         enable()
-        return true
+        return wantedActive
     }
 
     func brightnessKeyControlDidBecomeUnavailable() {
@@ -319,6 +323,10 @@ final class BoostController {
               wantedActive else {
             return
         }
+        scheduleResume()
+    }
+
+    private func scheduleResume() {
         engagementGeneration += 1
         let generation = engagementGeneration
         resumePending = true
@@ -343,13 +351,16 @@ final class BoostController {
     }
 
     func colorSpaceDidChange(on screen: NSScreen) {
+        handleColorProfileChange(on: screen, identity: Self.colorProfileIdentity(for: screen))
+    }
+
+    func handleColorProfileChange(on screen: NSScreen, identity currentIdentity: ColorProfileIdentity) {
         guard wantedActive,
               let displayID = screen.displayBoostID,
               displayID == activeDisplayID else {
             return
         }
 
-        let currentIdentity = Self.colorProfileIdentity(for: screen)
         if let activeColorProfileIdentity,
            activeColorProfileIdentity.matches(currentIdentity) {
             // macOS also emits this notification for transient EDR and display
@@ -358,6 +369,10 @@ final class BoostController {
             return
         }
 
+        let shouldResume = nativeBrightness.read(displayID: displayID).map {
+            $0 >= Self.nativeBrightnessMaximumThreshold
+        } ?? false
+        let originalRestoreBrightness = savedNativeBrightness
         if let currentBrightness = nativeBrightness.read(displayID: displayID) {
             if currentBrightness < Self.nativeBrightnessMaximumThreshold {
                 // A color-profile change must use the ColorSync reset below rather than
@@ -408,7 +423,16 @@ final class BoostController {
         defaults.synchronize()
         if nativeBrightnessRestored {
             activeDisplayID = nil
-            setState(.unavailable("颜色配置已改变，增亮已关闭"))
+            if shouldResume {
+                // Rebuild from the NEW ColorSync profile, never reuse the old LUT.
+                // Keep the original backlight so a later explicit disable restores it.
+                wantedActive = true
+                resumeBrightnessBaseline = originalRestoreBrightness
+                setState(.engaging)
+                if suspensionReasons.isEmpty { scheduleResume() }
+            } else {
+                setState(.off)
+            }
         } else {
             setState(.unavailable("颜色配置已改变；标准亮度恢复待处理"))
         }
@@ -424,9 +448,7 @@ final class BoostController {
         guard verifyNativeBrightnessForBoost(displayID: displayID) else { return }
 
         let currentEDR = screen.maximumExtendedDynamicRangeColorComponentValue
-        let edrIsUseful = currentEDR >= 2.5
-        let fallbackDeadlineReached = attemptsRemaining <= 10 && currentEDR > 1.05
-        if edrIsUseful || fallbackDeadlineReached {
+        if currentEDR > 1.05 {
             applyCurrentLevel()
             return
         }
@@ -555,7 +577,7 @@ final class BoostController {
                 return
             }
             setState(.engaging)
-            waitForEDR(generation: generation, attemptsRemaining: 30)
+            waitForEDR(generation: generation, attemptsRemaining: 80)
             return
         }
 
@@ -761,6 +783,12 @@ final class BoostController {
     }
 
     private func setState(_ newState: BoostState) {
+        if state != newState {
+            logger.info("Boost state: \(String(describing: newState), privacy: .public)")
+            // Small, persistent breadcrumbs make field failures diagnosable.
+            defaults.set(String(describing: newState), forKey: "lastBoostState")
+            defaults.set(Date().timeIntervalSince1970, forKey: "lastBoostStateAt")
+        }
         state = newState
         publishSnapshot()
     }

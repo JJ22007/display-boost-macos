@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.instanceLock = instanceLock
 
         ProcessInfo.processInfo.disableSuddenTermination()
+        ProcessInfo.processInfo.disableAutomaticTermination("Menu bar brightness control")
         NSApp.setActivationPolicy(.accessory)
 
         let boostController = BoostController()

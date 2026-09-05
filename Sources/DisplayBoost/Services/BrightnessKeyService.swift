@@ -13,7 +13,7 @@ final class BrightnessKeyService {
     private let handler: Handler
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var swallowedKeyCodes: Set<Int> = []
+    private var keySequence = BrightnessKeySequence()
 
     init(handler: @escaping Handler) {
         self.handler = handler
@@ -100,7 +100,7 @@ final class BrightnessKeyService {
     }
 
     func stop() {
-        swallowedKeyCodes.removeAll()
+        keySequence = BrightnessKeySequence()
         if let runLoopSource {
             CFRunLoopRemoveSource(
                 CFRunLoopGetMain(),
@@ -139,7 +139,7 @@ final class BrightnessKeyService {
 
         if mediaKey.phase != .keyDown {
             if mediaKey.phase == .keyUp,
-               swallowedKeyCodes.remove(mediaKey.keyCode) != nil {
+               keySequence.consumeRelease(code: mediaKey.keyCode) {
                 return nil
             }
             return passThrough
@@ -150,17 +150,16 @@ final class BrightnessKeyService {
         let optionHeld = modifiers.contains(.option)
         let shiftHeld = modifiers.contains(.shift)
         if optionHeld && !shiftHeld {
-            swallowedKeyCodes.remove(mediaKey.keyCode)
+            keySequence.recordDown(code: mediaKey.keyCode, consumed: false)
             return passThrough
         }
 
         let handled = handler(mediaKey.direction, optionHeld && shiftHeld)
+        keySequence.recordDown(code: mediaKey.keyCode, consumed: handled)
         if handled {
-            swallowedKeyCodes.insert(mediaKey.keyCode)
             return nil
         }
 
-        swallowedKeyCodes.remove(mediaKey.keyCode)
         return passThrough
     }
 }

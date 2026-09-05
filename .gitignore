@@ -3,5 +3,6 @@
 dist/
 work/
 outputs/*.app/
+outputs/*.zip
 *.log
 .DS_Store

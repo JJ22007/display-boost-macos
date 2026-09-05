@@ -1,5 +1,23 @@
 import Foundation
 
+// A held key may cross from native brightness into boost. If ANY key-down
+// reached macOS, its matching key-up must also reach macOS to end that gesture.
+struct BrightnessKeySequence {
+    private var forwarded: Set<Int> = []
+    private var handled: Set<Int> = []
+
+    mutating func recordDown(code: Int, consumed: Bool) {
+        if consumed { handled.insert(code) }
+        else { forwarded.insert(code) }
+    }
+
+    mutating func consumeRelease(code: Int) -> Bool {
+        let wasForwarded = forwarded.remove(code) != nil
+        let wasHandled = handled.remove(code) != nil
+        return wasHandled && !wasForwarded
+    }
+}
+
 enum BrightnessMediaKeyPhase: Equatable {
     case keyDown
     case keyUp

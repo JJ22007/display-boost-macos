@@ -3,6 +3,41 @@
 A small, local-only macOS menu bar utility that opens the built-in Liquid Retina
 XDR display's EDR headroom and applies a bounded gamma-table boost.
 
+## Compatibility & installation
+
+macOS 13 or later. The universal app contains native arm64 and x86_64 binaries.
+Copy `Display Boost.app` from `Display-Boost-universal.zip` into Applications on
+each Mac. Enable Accessibility for that copy to use F1/F2.
+
+Boost is enabled according to the built-in display's live EDR capability, not a
+Mac model whitelist. Liquid Retina XDR MacBook Pro displays are the intended
+hardware. A non-EDR panel shows an unsupported state and keeps native brightness
+keys working. Intel compatibility means the app can run, not that an older LCD
+can acquire XDR brightness. Percentage is a requested boost, not measured nits;
+the applied gain is limited by current EDR headroom and a conservative curve.
+See Apple's [EDR capability documentation](https://developer.apple.com/documentation/appkit/nsscreen/maximumpotentialextendeddynamicrangecolorcomponentvalue).
+
+The current download is locally/ad-hoc signed, not Apple notarized. macOS may
+require Open Anyway in Privacy & Security after the first launch attempt, and
+Accessibility may need reauthorization after an update. For distribution with a
+Developer ID certificate, set `DISPLAYBOOST_SIGN_IDENTITY` when packaging; Apple
+notarization is a separate step. Do not disable Gatekeeper system-wide.
+
+## Reliability
+
+Version 1.2 resumes after sleep and safely re-baselines after a changed color
+profile. Identical-profile notifications are ignored; error states can be retried
+from the slider. User or system backlight reductions still take precedence so
+F1 and automatic brightness do not fight the app. A fresh launch starts disabled.
+The status menu is intentionally small; hover an error status for details.
+
+CI builds and packages both architectures and runs hardware-independent tests.
+The opt-in `--hardware-self-test` also exercises nested sleep/wake, duplicate
+profile notifications, injected changed-profile recovery and apply/restore on a
+real screen. These tests do not constitute testing every MacBook Pro model.
+State changes are logged under `local.jjxu.DisplayBoost` / `Recovery`, with the
+latest state also stored in `lastBoostState` and `lastBoostStateAt` preferences.
+
 ## Usage
 
 1. Open **Display Boost.app**.

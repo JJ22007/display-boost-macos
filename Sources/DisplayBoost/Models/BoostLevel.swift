@@ -8,7 +8,7 @@ struct BoostLevel: Equatable {
     let factor: Float
 
     init(_ proposed: Float) {
-        factor = min(max(proposed, Self.minimum), Self.maximum)
+        factor = proposed.isFinite ? min(max(proposed, Self.minimum), Self.maximum) : Self.minimum
     }
 
     var percentage: Int {
@@ -26,6 +26,7 @@ enum BoostCalibration {
     static let maximumBonusGamma: Float = 0.59
 
     static func gammaFactor(level: BoostLevel, currentEDR: Float) -> Float {
+        guard currentEDR.isFinite, currentEDR > 1 else { return 1 }
         let boundedEDR = min(
             max(currentEDR, referenceEDR),
             maximumEDRPipelineValue
@@ -36,7 +37,7 @@ enum BoostCalibration {
         )
         let requestedFraction = (level.factor - BoostLevel.minimum) /
             (BoostLevel.maximum - BoostLevel.minimum)
-        return 1 + availableBonus * requestedFraction
+        return min(currentEDR, 1 + availableBonus * requestedFraction)
     }
 }
 

@@ -1,8 +1,10 @@
 import Foundation
 
 private var failureCount = 0
+private var checkCount = 0
 
 private func expect(_ condition: @autoclosure () -> Bool, _ name: String) {
+    checkCount += 1
     if condition() {
         print("PASS: \(name)")
     } else {
@@ -152,8 +154,26 @@ expect(
     "temporary missing ICC data falls back to profile name"
 )
 
+expect(BoostLevel(.nan).factor == 1, "invalid saved level safely defaults to standard")
+var sequence = BrightnessKeySequence()
+sequence.recordDown(code: 2, consumed: false)
+sequence.recordDown(code: 2, consumed: true)
+expect(!sequence.consumeRelease(code: 2), "held F2 crossing 100 percent still releases system HUD")
+sequence.recordDown(code: 3, consumed: true)
+sequence.recordDown(code: 3, consumed: false)
+expect(!sequence.consumeRelease(code: 3), "held F1 crossing below boost still releases native key")
+sequence.recordDown(code: 2, consumed: true)
+expect(sequence.consumeRelease(code: 2), "fully intercepted gesture consumes its release")
+expect(!sequence.consumeRelease(code: 2), "unmatched key-up passes through")
+for headroom: Float in [1, 1.1, 1.3, 2, 4, 8, 16] {
+    let value = BoostCalibration.gammaFactor(level: BoostLevel(1.6), currentEDR: headroom)
+    expect(value >= 1 && value <= headroom, "gamma respects available EDR \(headroom)")
+}
+expect(BoostCalibration.gammaFactor(level: BoostLevel(1.6), currentEDR: .nan) == 1,
+       "invalid headroom does not boost")
+
 if failureCount > 0 {
     exit(1)
 }
 
-print("24/24 logic checks passed")
+print("\(checkCount)/\(checkCount) logic checks passed")
